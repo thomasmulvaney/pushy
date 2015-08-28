@@ -1,10 +1,10 @@
 (ns pushy.core
-  (:require [goog.events :as events])
+  (:require [goog.events :as events]
+            [pushy.uri :as uri])
   (:import goog.History
            goog.history.Html5History
            goog.history.Html5History.TokenTransformer
-           goog.history.EventType
-           goog.Uri))
+           goog.history.EventType))
 
 (defn- on-click [funk]
   (events/listen js/document "click" funk))
@@ -12,7 +12,7 @@
 (defn- recur-href
   "Traverses up the DOM tree and returns the first node that contains a href attr"
   [target]
-  (if (.-href target)
+  (if (uri/href target)
     target
     (when (.-parentNode target)
       (recur-href (.-parentNode target)))))
@@ -30,7 +30,7 @@
   t)
 
 (defn- set-create-url! [t]
-  (set! (.. t -createUrl)
+  (set! (.-createUrl t)
         (fn [token path-prefix location]
           (str path-prefix token)))
   t)
@@ -90,15 +90,14 @@
                 (on-click
                  (fn [e]
                    (when-let [el (recur-href (-> e .-target))]
-                     (let [uri (.parse Uri (.-href el))
-                           path (.getPath uri)
-                           query (.getQuery uri)
-                           ;; Include query string in token
-                           next-token (if (empty? query) path (str path "?" query))]
+                     (let [url    (uri/href el)
+                           path   (uri/path-and-after url)
+                           query  (uri/query url)
+                           domain (uri/domain url)]
                        ;; Proceed if `identity-fn` returns a value and
                        ;; the user did not trigger the event via one of the
                        ;; keys we should bypass
-                       (when (and (identity-fn (match-fn next-token))
+                       (when (and (identity-fn (match-fn path))
                                   ;; Bypass dispatch if any of these keys
                                   (not (.-altKey e))
                                   (not (.-ctrlKey e))
@@ -110,8 +109,8 @@
                                   (not= 1 (.-button e)))
                          ;; Dispatch!
                          (if-let [title (-> el .-title)]
-                           (set-token! this next-token title)
-                           (set-token! this next-token))
+                           (set-token! this path title)
+                           (set-token! this path))
                          (.preventDefault e)))))))
          nil)
 
